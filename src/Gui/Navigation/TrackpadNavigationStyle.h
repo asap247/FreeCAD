@@ -1,81 +1,28 @@
-#include "TrackpadNavigationStyle.h"
+// SPDX-License-Identifier: LGPL-2.1-or-later
+#pragma once
 
-#include <Inventor/events/SoEvent.h>
-#include <Inventor/events/SoLocation2Event.h>
-#include <Inventor/events/SoMouseWheelEvent.h>
-#include <Inventor/events/SoKeyboardEvent.h>
+#include <Gui/UserNavigationStyle.h>
 
-#include <Gui/View3DInventorViewer.h>
-
-using namespace Gui;
-
-TrackpadNavigationStyle::TrackpadNavigationStyle()
+namespace Gui
 {
-}
 
-const char* TrackpadNavigationStyle::getName() const
+class TrackpadNavigationStyle : public UserNavigationStyle
 {
-    return "Trackpad";
-}
+    TYPESYSTEM_HEADER();
 
-bool TrackpadNavigationStyle::processSoEvent(const SoEvent* ev)
-{
-    auto* viewer = this->getViewer();
-    if (!viewer)
-        return false;
+public:
+    static void init();
 
-    /* ------------------------------------------------------------
-     * One-finger drag: cursor move only (no camera motion)
-     * ------------------------------------------------------------ */
-    if (const SoLocation2Event* loc =
-            dynamic_cast<const SoLocation2Event*>(ev)) {
+    TrackpadNavigationStyle();
+    ~TrackpadNavigationStyle() override;
 
-        SbVec2s pos = loc->getPosition();
+    const char* getName() const override;
 
-        lastPos = pos;
-        hasLastPos = true;
+protected:
+    SbBool processSoEvent(const SoEvent* ev) override;
 
-        return true; // consume event, no click required
-    }
+private:
+    SbVec2f lastPos;
+};
 
-    /* ------------------------------------------------------------
-     * Two-finger gestures (Qt sends these as wheel events on macOS)
-     * ------------------------------------------------------------ */
-    if (const SoMouseWheelEvent* wheel =
-            dynamic_cast<const SoMouseWheelEvent*>(ev)) {
-
-        SbVec2f delta = wheel->getDelta();
-        delta *= 0.5f; // macOS sensitivity tuning
-
-        const bool shift =
-            wheel->getModifiers() & SoEvent::SHIFT_DOWN;
-
-        const bool ctrl =
-            wheel->getModifiers() & SoEvent::CTRL_DOWN;
-
-        /* --------------------------------------------------------
-         * Pinch zoom (Ctrl modifier on macOS Qt)
-         * -------------------------------------------------------- */
-        if (ctrl) {
-            viewer->zoomCamera(delta[1] * 0.01f);
-            return true;
-        }
-
-        /* --------------------------------------------------------
-         * Shift + two-finger drag = rotate
-         * -------------------------------------------------------- */
-        if (shift) {
-            viewer->rotateCamera(delta[0] * 0.01f,
-                                 delta[1] * 0.01f);
-            return true;
-        }
-
-        /* --------------------------------------------------------
-         * Two-finger drag = pan
-         * -------------------------------------------------------- */
-        viewer->panCamera(delta[0], delta[1]);
-        return true;
-    }
-
-    return false;
-}
+} // namespace Gui
