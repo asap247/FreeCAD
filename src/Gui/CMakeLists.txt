@@ -1001,6 +1001,7 @@ SET(Navigation_CPP_SRCS
     Navigation/GestureNavigationStyle.cpp
     Navigation/NavigationAnimator.cpp
     Navigation/NavigationAnimation.cpp
+    Navigation/TrackpadNavigationStyle.cpp
 )
 SET(Navigation_SRCS
     ${Navigation_CPP_SRCS}
@@ -1011,6 +1012,7 @@ SET(Navigation_SRCS
     Navigation/NavigationAnimator.h
     Navigation/NavigationAnimation.h
     Navigation/SiemensNXNavigationStyle.h
+    Navigation/TrackpadNavigationStyle.h
 )
 SOURCE_GROUP("Navigation" FILES ${Navigation_SRCS})
 
