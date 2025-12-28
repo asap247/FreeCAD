@@ -219,6 +219,7 @@ void Gui::SoFCDB::init()
     SolidWorksNavigationStyle ::init();
     TinkerCADNavigationStyle ::init();
     TouchpadNavigationStyle ::init();
+    TrackpadNavigationStyle ::init();    
 
     GLGraphicsItem ::init();
     GLFlagWindow ::init();
@@ -772,3 +773,4 @@ SoGroup* Gui::SoFCDB::getStorage()
     assert(storage);  // call init first.
     return storage;
 }
+
