@@ -1,76 +1,130 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+
 #include "TrackpadNavigationStyle.h"
 
-#include <Inventor/events/SoEvent.h>
+#include <Gui/NavigationStyle.h>
+#include <Gui/View3DInventorViewer.h>
+
 #include <Inventor/events/SoLocation2Event.h>
 #include <Inventor/events/SoMouseWheelEvent.h>
 
-#include <Gui/View3DInventorViewer.h>
-#include <Gui/NavigationStyle.h>
-
 using namespace Gui;
 
-/* ------------------------------------------------------------
- * Static registration
- * ------------------------------------------------------------ */
-static NavigationStyle::Type
-    TrackpadNavigationStyleType(
-        "Trackpad",
-        []() { return new TrackpadNavigationStyle; }
-    );
+TYPESYSTEM_SOURCE(Gui::TrackpadNavigationStyle, Gui::UserNavigationStyle)
+
+// --------------------------------------------------------------------
 
 TrackpadNavigationStyle::TrackpadNavigationStyle()
 {
+    lastPos.setValue(0.f, 0.f);
 }
+
+TrackpadNavigationStyle::~TrackpadNavigationStyle() = default;
 
 const char* TrackpadNavigationStyle::getName() const
 {
     return "Trackpad";
 }
 
-bool TrackpadNavigationStyle::processSoEvent(const SoEvent* ev)
+// --------------------------------------------------------------------
+
+void TrackpadNavigationStyle::init()
 {
-    auto* viewer = getViewer();
-    if (!viewer)
-        return false;
+    NavigationStyle::addType(
+        "Trackpad",
+        []() { return new TrackpadNavigationStyle; }
+    );
+}
 
-    // One-finger drag: cursor move only
-    if (const SoLocation2Event* loc =
-            dynamic_cast<const SoLocation2Event*>(ev)) {
+// --------------------------------------------------------------------
 
-        lastPos = loc->getPosition();
-        hasLastPos = true;
-        return true;
+SbBool TrackpadNavigationStyle::processSoEvent(const SoEvent* ev)
+{
+    // Let base class handle seek / selection / keyboard, etc.
+    if (this->isSeekMode()) {
+        return inherited::processSoEvent(ev);
     }
 
-    // Two-finger gestures
-    if (const SoMouseWheelEvent* wheel =
-            dynamic_cast<const SoMouseWheelEvent*>(ev)) {
+    const SoType type(ev->getTypeId());
 
-        SbVec2f delta = wheel->getDelta();
-        delta *= 0.5f;
+    // ------------------------------------------------------------
+    // Cursor movement (one-finger drag)
+    // ------------------------------------------------------------
+    if (type.isDerivedFrom(SoLocation2Event::getClassTypeId())) {
+        const auto* event = static_cast<const SoLocation2Event*>(ev);
+        const SbVec2f posn = normalizePixelPos(event->getPosition());
+        lastPos = posn;
 
-        const bool shift =
-            wheel->getModifiers() & SoEvent::SHIFT_DOWN;
-        const bool ctrl =
-            wheel->getModifiers() & SoEvent::CTRL_DOWN;
+        // Do NOT consume the event – allow normal hover / selection logic
+        return inherited::processSoEvent(ev);
+    }
 
-        // Pinch zoom
-        if (ctrl) {
-            viewer->zoomCamera(delta[1] * 0.01f);
+    // ------------------------------------------------------------
+    // Trackpad gestures (two-finger pan, shift+pan rotate, pinch zoom)
+    // ------------------------------------------------------------
+    if (type.isDerivedFrom(SoMouseWheelEvent::getClassTypeId())) {
+        const auto* wheel = static_cast<const SoMouseWheelEvent*>(ev);
+
+        const SbVec2f delta(
+            static_cast<float>(wheel->getDelta().getValue()[0]),
+            static_cast<float>(wheel->getDelta().getValue()[1])
+        );
+
+        // Ignore tiny noise
+        if (fabs(delta[0]) < 0.01f && fabs(delta[1]) < 0.01f) {
             return true;
         }
 
-        // Rotate
-        if (shift) {
-            viewer->rotateCamera(delta[0] * 0.01f,
-                                 delta[1] * 0.01f);
+        const SbViewportRegion& vp =
+            viewer->getSoRenderManager()->getViewportRegion();
+
+        const float aspect = vp.getViewportAspectRatio();
+        SoCamera* cam = viewer->getSoRenderManager()->getCamera();
+
+        // --------------------------------------------------------
+        // Pinch zoom (Ctrl + wheel)
+        // --------------------------------------------------------
+        if (wheel->getModifiers() & SoEvent::CTRL_DOWN) {
+            const float zoomFactor = 1.0f + (-delta[1] * 0.0025f);
+            if (zoomFactor > 0.0f) {
+                viewer->zoomCamera(zoomFactor);
+            }
             return true;
         }
 
-        // Pan
-        viewer->panCamera(delta[0], delta[1]);
+        // --------------------------------------------------------
+        // Rotate (Shift + two-finger drag)
+        // --------------------------------------------------------
+        if (wheel->getModifiers() & SoEvent::SHIFT_DOWN) {
+            const SbVec2f rot(
+                -delta[0] * 0.0025f,
+                -delta[1] * 0.0025f
+            );
+            viewer->spinCamera(rot);
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // Pan (two-finger drag)
+        // --------------------------------------------------------
+        const SbVec2f pan(
+            -delta[0] * 0.0025f,
+             delta[1] * 0.0025f
+        );
+
+        panCamera(
+            cam,
+            aspect,
+            this->panningplane,
+            SbVec2f(0.f, 0.f),
+            pan
+        );
+
         return true;
     }
 
-    return false;
+    // ------------------------------------------------------------
+    // Fallback
+    // ------------------------------------------------------------
+    return inherited::processSoEvent(ev);
 }
